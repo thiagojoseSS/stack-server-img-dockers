@@ -20,6 +20,8 @@ services:
     volumes:
       - traefik_data:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - webnet
 
   n8n:
     image: docker.n8n.io/n8nio/n8n
@@ -51,38 +53,62 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./local-files:/files
+    networks:
+      - webnet
     
-    evolution-api:
-        container_name: evolution_api
-        image: atendai/evolution-api:v2.1.1
-        restart: always
-        ports:
-            - "8080:8080"
-        env_file:
-            - .env
-        volumes:
-            - evolution_instances:/evolution/instances
-    
-    db:
-        image: postgres
-        restart: always
-        # set shared memory limit when using docker-compose
-        shm_size: 128mb
-        # or set shared memory limit when deploy via swarm stack
-        volumes:
-         - type: tmpfs
-           target: /dev/shm
-           tmpfs:
-             size: 134217728 # 128*2^20 bytes = 128Mb
-        environment:
-        POSTGRES_PASSWORD: example
+  evolution-api:
+      container_name: evolution_api
+      image: atendai/evolution-api:v2.1.1
+      restart: always
+      ports:
+          - "8080:8080"
+      env_file:
+          - .env
+      volumes:
+          - evolution_instances:/evolution/instances
+      networks:
+        - webnet
+  
+  ftp:
+    image: fauria/vsftpd
+    container_name: ftp_server
+    environment:
+      FTP_USER: ${FTP_USER} # Usuário do FTP
+      FTP_PASS: ${FTP_PASSWORD} # Senha do FTP
+      PASV_ADDRESS: "127.0.0.1" # Endereço para conexões passivas
+      PASV_MIN_PORT: 21100
+      PASV_MAX_PORT: 21110
+    ports:
+      - "21:21"              # Porta padrão do FTP
+      - "21100-21110:21100-21110" # Faixa de portas para modo passivo
+    volumes:
+      - /home/ubuntu/github-actions-ftp/ftp:/home/vsftpd:rw # Monta a pasta local 'site/' no diretório padrão do FTP
+    networks:
+      - webnet
+    restart: always
+  
+  db:
+      image: postgres
+      restart: always
+      # set shared memory limit when using docker-compose
+      shm_size: 128mb
+      # or set shared memory limit when deploy via swarm stack
+      volumes:
+        - type: tmpfs
+          target: /dev/shm
+          tmpfs:
+            size: 134217728 # 128*2^20 bytes = 128Mb
+      environment:
+      POSTGRES_PASSWORD: example
 
-    adminer:
-        image: adminer
-        restart: always
-        ports:
-        - 8080:8080
+  adminer:
+      image: adminer
+      restart: always
+      ports:
+      - 8080:8080
 
+networks:
+  webnet:
 
 volumes:
   n8n_data:
